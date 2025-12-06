@@ -1,0 +1,497 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Birthday Surprise — Cover Photo + Foldable Book</title>
+<style>
+  :root{
+    --accent:#ff6b6b;
+    --muted:#9aa4b2;
+    --book-cover:#7a522f;
+    --book-spine:#5a3e1b;
+    --page-bg:#fffef8;
+    --bg-deep:#02031a;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:var(--bg-deep);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;color:#fff;overflow:hidden}
+
+  .stage{position:relative;width:100%;height:100vh;display:flex;align-items:center;justify-content:center;padding:18px}
+
+/* ---------- Stars canvas ---------- */
+#starsCanvas{position:fixed;left:0;top:0;width:100%;height:100%;z-index:0;pointer-events:none}
+
+/* ---------- Scenes ---------- */
+.scene{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;z-index:3;padding:20px}
+.scene.active{display:flex}
+
+/* ---------- Music-first Scene ---------- */
+#musicScene{background:linear-gradient(180deg,#000,#071127);z-index:60}
+.musicCard{
+  text-align:center;padding:28px;border-radius:16px;background:linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02));
+  box-shadow:0 20px 60px rgba(0,0,0,0.6);
+}
+.musicBtn{
+  background:linear-gradient(90deg,var(--accent),#ffb46b);color:#fff;border:0;padding:18px 26px;border-radius:14px;font-size:20px;font-weight:800;cursor:pointer;
+  box-shadow:0 12px 38px rgba(255,90,120,0.15)
+}
+.musicHint{margin-top:12px;color:rgba(255,255,255,0.85)}
+
+/* ---------- Falling intro ---------- */
+#intro{background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);z-index:10}
+.headline{font-size:clamp(28px,6vw,64px);font-weight:900;color:var(--accent);text-align:center}
+.sub{margin-top:12px;color:var(--muted);font-size:clamp(14px,2.4vw,18px)}
+.falling-area{position:absolute;inset:0;pointer-events:none;z-index:12;overflow:hidden}
+.falling-word{position:absolute;top:-10vh;font-weight:800;color:rgba(255,255,255,0.96);text-shadow:0 8px 20px rgba(0,0,0,0.28);user-select:none;pointer-events:none}
+@keyframes fall { 0%{transform:translateY(-20vh) rotate(0deg); opacity:0} 10%{opacity:1} 100%{transform:translateY(120vh) rotate(180deg); opacity:1} }
+
+/* ---------- Celebration ---------- */
+#celebrate{display:none;align-items:center;justify-content:center;background:linear-gradient(180deg,#071227,#04101f);z-index:8;overflow:hidden}
+.emoji-row{display:flex;gap:20px;align-items:center;justify-content:center}
+.emoji{font-size:clamp(56px,10vw,140px);filter:drop-shadow(0 16px 30px rgba(0,0,0,0.5));animation: floaty 2600ms infinite ease-in-out;}
+@keyframes floaty{0%{transform:translateY(0)}50%{transform:translateY(-16px)}100%{transform:translateY(0)}}
+.balloon{position:absolute;bottom:-18vh;font-size:40px;animation: rise linear infinite;opacity:0.98}
+@keyframes rise{0%{transform:translateY(0)}100%{transform:translateY(-140vh)}}
+#confettiCanvas{position:absolute;inset:0;z-index:6;pointer-events:none}
+
+/* ---------- Book (closed with cover photo) ---------- */
+#bookScene{display:none;background:linear-gradient(180deg,#020519,#071127);padding:28px;flex-direction:column;align-items:center;justify-content:flex-start;overflow:hidden}
+.book-header{width:min(980px,94%);display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;z-index:30}
+.book-title{font-weight:800;color:var(--accent);font-size:20px}
+.controls{display:flex;gap:10px}
+
+.book-wrap{position:relative;width:min(920px,92%);height:min(640px,82%);perspective:2200px;display:flex;align-items:center;justify-content:center;}
+.book{width:100%;height:100%;position:relative;display:flex;align-items:center;justify-content:center;transform-style:preserve-3d}
+
+/* covers */
+.book-cover-left,.book-cover-right{position:absolute;top:0;bottom:0;width:50%;pointer-events:none}
+.book-cover-left{left:0;background:linear-gradient(90deg,#6f442f,#8b5a39);z-index:10}
+.book-cover-right{right:0;background:linear-gradient(270deg,#6f442f,#8b5a39);z-index:10}
+.book-spine{position:absolute;left:calc(50% - 28px);top:0;bottom:0;width:56px;background:var(--book-spine);border-radius:4px;z-index:40;box-shadow:0 12px 40px rgba(0,0,0,0.6)}
+
+/* left inner page (static) */
+.left-page{position:absolute;left:0;top:30px;bottom:30px;width:50%;background:linear-gradient(180deg,#fffef8,#fff7ec);z-index:20;padding:28px;border-radius:4px;border-right:1px solid rgba(0,0,0,0.06);overflow:auto;box-shadow:inset -6px 0 20px rgba(0,0,0,0.03);color:#333}
+
+/* page-stack contains the right-side flipable panels */
+.page-stack{position:absolute;left:calc(50% - 4px);top:30px;bottom:30px;width:50%;transform-style:preserve-3d;z-index:50}
+
+/* page element - right half, flips from left edge */
+.page{
+  position:absolute; right:0; top:0; width:100%; height:100%; transform-origin:left center;
+  background:var(--page-bg); padding:28px; border-radius:4px; overflow:auto;
+  box-shadow:0 12px 30px rgba(2,8,23,0.18); border-left:1px solid rgba(0,0,0,0.06);
+  transition: transform 900ms cubic-bezier(.2,.9,.2,1), box-shadow 220ms; backface-visibility:hidden;
+  display:flex;flex-direction:column;
+}
+
+/* backside when flipped */
+.page.back { transform: rotateY(-180deg); background: linear-gradient(0deg,#f6f0e6,#efe7d6); }
+
+/* stacked z-index ordering (first element on top) */
+.page[data-index="0"]{z-index:120}
+.page[data-index="1"]{z-index:110}
+.page[data-index="2"]{z-index:100}
+.page[data-index="3"]{z-index:90}
+
+/* flipped state */
+.page.flipped{ transform: rotateY(-180deg); box-shadow: 0 6px 18px rgba(0,0,0,0.12); }
+
+/* cover element (first thing visible) */
+.cover{
+  position:absolute; right:0; top:0; width:100%; height:100%;
+  background:#111; border-radius:4px; overflow:hidden; display:flex;align-items:center;justify-content:center;cursor:pointer;
+  box-shadow:0 18px 40px rgba(0,0,0,0.4); border-left:1px solid rgba(0,0,0,0.08);
+}
+.cover img{width:100%;height: 190%;object-fit:cover;display:block}
+
+/* hearts + stars decorative background (light & subtle) */
+.decoration{
+  position:absolute;inset:0;pointer-events:none;opacity:0.11;mix-blend-mode:screen;background-image:
+    radial-gradient(circle at 10% 20%, rgba(255,200,220,0.9) 0px, transparent 6px),
+    radial-gradient(circle at 60% 40%, rgba(255,230,200,0.9) 0px, transparent 5px),
+    radial-gradient(circle at 40% 70%, rgba(255,240,220,0.9) 0px, transparent 4px);
+  background-repeat:repeat;
+  z-index:15;
+}
+
+/* modal popup */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:90;opacity:0;pointer-events:none;transition:opacity 260ms}
+.modal.show{opacity:1;pointer-events:auto}
+.modal .card{background:#fff;padding:26px;border-radius:12px;color:#111;max-width:720px;max-height:80vh;overflow:auto}
+.typing{display:inline-block;border-right:2px solid #000;padding-right:6px;white-space:pre-wrap;overflow:hidden}
+
+/* controls/buttons */
+.controls button{background:linear-gradient(90deg,var(--accent),#ffb46b);border:0;color:#fff;padding:10px 14px;border-radius:10px;cursor:pointer;font-weight:700}
+.controls .ghost{background:transparent;border:1px solid rgba(255,255,255,0.08);color:#fff}
+
+/* responsive */
+@media (max-width:920px){ .book-wrap{width:96%;height:74%} .headline{font-size:32px} .emoji{font-size:72px} }
+@media (max-width:520px){ .book-wrap{height:78%} .page{padding:18px} .left-page{padding:16px} }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <canvas id="starsCanvas"></canvas>
+
+    <!-- music-first screen -->
+    <section id="musicScene" class="scene active" aria-label="Play music">
+      <div class="musicCard">
+        <div style="font-size:28px;font-weight:800;margin-bottom:8px">Tap to reveal the surprise</div>
+        <button class="musicBtn" id="playTap">TAP HERE</button>
+        <div class="musicHint"></div>
+      </div>
+    </section>
+
+    <!-- intro scene (falling words + type) -->
+    <section id="intro" class="scene" aria-label="Intro" style="display:none">
+      <h1 class="headline" id="headlineText">Happy Birthday To You AASHI JII🎉</h1>
+      <div class="sub" id="typedSub">A special surprise is coming your way…</div>
+      <div class="falling-area" id="falling"></div>
+      <div class="controls" style="margin-top:20px">
+        <button class="btn ghost" id="skipIntro">Skip Intro</button>
+      </div>
+    </section>
+
+    <!-- celebration scene -->
+    <section id="celebrate" class="scene" aria-label="Celebrate" style="display:none">
+      <div class="emoji-row" style="z-index:10">
+        <!--<div class="emoji">👩‍🎉</div>
+        <div class="emoji">🎂</div>
+        <div class="emoji">👨‍🎉</div>-->
+        <img src="happy.gif" alt="Birthday GIF" />
+      </div>
+      <div id="celebrateControls" style="position:absolute;bottom:28px;z-index:40;display:flex;gap:12px">
+        <button class="controls" id="toBook">Open Book</button>
+      </div>
+      <canvas id="confettiCanvas"></canvas>
+    </section>
+
+    <!-- book scene -->
+    <section id="bookScene" class="scene" aria-label="Book" style="display:none">
+      <div class="book-header" style="width:min(980px,94%);margin-bottom:10px">
+        <div>
+          <div class="book-title">A Little Book of Wishes</div>
+          <div style="font-size:13px;color:var(--muted)">Tap the cover or press Next → to open</div>
+        </div>
+        <div class="controls" style="gap:8px">
+          <button class="ghost" id="prevBtn">← Prev</button>
+          <button id="nextBtn">Next →</button>
+          <button class="ghost" id="showPopup">Special Message</button>
+        </div>
+      </div>
+
+      <div class="book-wrap" aria-hidden="false">
+        <div class="book" role="region" aria-label="Birthday book">
+          <!--<div class="left-page" aria-hidden="true">-->
+            <!--<h2 style="color:var(--accent);margin-top:0">To You</h2>
+            <p style="color:#333">Open the cover on the right to reveal the wishes.</p>-->
+            <div style="height:16px"></div>
+            <!--<small style="color:#666">Tip: Press ← / → to flip pages</small>-->
+          </div>
+
+          <!--<div class="book-spine" aria-hidden="true"></div>-->
+          <!--<div class="book-cover-left" aria-hidden="true"></div>-->
+          <div class="book-cover-right" aria-hidden="true"></div>
+
+          <div class="page-stack" id="pageStack" aria-live="polite" aria-atomic="true">
+            <!-- Cover (visible initially) -->
+            <div class="cover" id="cover">
+              <img src="ois.jpg" alt="Cover photo" id="coverImg" />
+            </div>
+            <!-- Pages will be injected here by JS -->
+            <div class="decoration" aria-hidden="true"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- modal -->
+    <div class="modal" id="modal" role="dialog" aria-modal="true">
+      <div class="card">
+        <h2>Special Message 💖</h2>
+        <p id="modalTyping" style="font-size:18px;color:#222"></p>
+        <div style="margin-top:18px;text-align:right"><button class="controls ghost" id="closeModal">Close</button></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- audio: your file must be named birthday.mp3 and in same folder -->
+  <audio id="bgAudio" loop preload="auto">
+    <source src="birthday.mp3" type="audio/mpeg">
+  </audio>
+
+<script>
+/* ====== Stars canvas (background) ====== */
+(function(){
+  const c = document.getElementById('starsCanvas'), ctx = c.getContext('2d');
+  function resize(){ c.width = innerWidth; c.height = innerHeight; }
+  window.addEventListener('resize', resize); resize();
+  const stars = Array.from({length:200}, ()=>({ x:Math.random()*c.width, y:Math.random()*c.height, r:Math.random()*1.6+0.2, a:Math.random() }));
+  function tick(){
+    ctx.clearRect(0,0,c.width,c.height);
+    const g = ctx.createLinearGradient(0,0,c.width,c.height);
+    g.addColorStop(0,'rgba(20,30,50,0.06)'); g.addColorStop(1,'rgba(2,6,20,0.18)');
+    ctx.fillStyle = g; ctx.fillRect(0,0,c.width,c.height);
+    for(const s of stars){
+      s.a += (Math.random()*0.02-0.01); s.a = Math.max(0.06,Math.min(1,s.a));
+      ctx.beginPath(); ctx.fillStyle = `rgba(255,255,255,${s.a})`; ctx.arc(s.x,s.y,s.r,0,Math.PI*2); ctx.fill();
+    }
+    requestAnimationFrame(tick);
+  }
+  tick();
+})();
+
+/* ====== Elements ====== */
+const musicScene = document.getElementById('musicScene');
+const introScene = document.getElementById('intro');
+const celebrateScene = document.getElementById('celebrate');
+const bookScene = document.getElementById('bookScene');
+const fallingEl = document.getElementById('falling');
+const bgAudio = document.getElementById('bgAudio');
+
+/* ====== Music-first behavior ====== */
+const playTap = document.getElementById('playTap');
+function startExperienceFromTap(){
+  // try to play audio (user-initiated)
+  bgAudio.play().catch(()=>{ /* ignore */ });
+  // hide music scene and start intro
+  musicScene.classList.remove('active'); musicScene.style.display='none';
+  startIntro();
+}
+playTap.addEventListener('click', startExperienceFromTap);
+
+/* Also allow pressing anywhere on musicScene to start */
+musicScene.addEventListener('click', (e)=>{
+  if(e.target === musicScene) startExperienceFromTap();
+});
+
+/* ====== Falling words (intro) ====== */
+const fallWords = ["Happy","Love","Wishes","Joy","Cake","Hugs","Smiles","Candles"];
+function spawnFalling(){
+  const el = document.createElement('div');
+  el.className = 'falling-word';
+  el.textContent = fallWords[Math.floor(Math.random()*fallWords.length)];
+  const size = 12 + Math.random()*34;
+  el.style.fontSize = size+'px';
+  el.style.left = (5 + Math.random()*85) + 'vw';
+  const dur = 3800 + Math.random()*4200;
+  el.style.animation = `fall ${dur}ms linear forwards`;
+  el.style.transform = `rotate(${Math.random()*50-25}deg)`;
+  fallingEl.appendChild(el);
+  setTimeout(()=> el.remove(), dur + 200);
+}
+let fallTimer = null;
+
+/* typewriter subtext */
+const typedSub = document.getElementById('typedSub');
+const subText = "A special surprise is coming your way…";
+function typeSub(){
+  let i=0; const speed=26;
+  typedSub.textContent='';
+  (function step(){ if(i<subText.length){ typedSub.textContent += subText[i++]; setTimeout(step, speed); }})();
+}
+
+/* Start intro after music tap */
+function startIntro(){
+  introScene.style.display='flex'; introScene.classList.add('active');
+  typeSub();
+  // spawn words
+  fallTimer = setInterval(spawnFalling, 420);
+  // auto-move to celebrate after 5.5s
+  setTimeout(()=> {
+    if(getComputedStyle(introScene).display !== 'none') showCelebrate();
+  }, 5500);
+}
+
+/* skip/start controls */
+document.getElementById('skipIntro').addEventListener('click', ()=> showCelebrate());
+
+/* ====== Celebrate scene ====== */
+const confCanvas = document.getElementById('confettiCanvas'); const confCtx = confCanvas.getContext('2d');
+let confettiPieces = []; let confReq = null;
+function resizeConf(){ confCanvas.width = innerWidth; confCanvas.height = innerHeight; }
+window.addEventListener('resize', resizeConf); resizeConf();
+
+function startConfetti(){
+  confettiPieces = Array.from({length:160}).map(()=>({
+    x: Math.random()*confCanvas.width,
+    y: Math.random()*confCanvas.height,
+    w: 6 + Math.random()*10,
+    h: 8 + Math.random()*14,
+    r: Math.random()*360,
+    d: 1 + Math.random()*3,
+    color: `hsl(${Math.random()*360},85%,60%)`
+  }));
+  if(!confReq) confReq = requestAnimationFrame(confettiTick);
+}
+function confettiTick(){
+  confCtx.clearRect(0,0,confCanvas.width,confCanvas.height);
+  confettiPieces.forEach(p=>{
+    confCtx.save();
+    confCtx.translate(p.x,p.y);
+    confCtx.rotate((p.r*Math.PI)/180);
+    confCtx.fillStyle = p.color;
+    confCtx.fillRect(-p.w/2, -p.h/2, p.w, p.h);
+    confCtx.restore();
+    p.y += p.d + Math.sin(p.x*0.01 + Date.now()*0.002);
+    p.x += Math.sin(p.y*0.01 + Date.now()*0.002) * 0.8;
+    if(p.y > confCanvas.height + 40){ p.y = -20; p.x = Math.random()*confCanvas.width; }
+  });
+  confReq = requestAnimationFrame(confettiTick);
+}
+function stopConfetti(){
+  if(confReq !== null){ cancelAnimationFrame(confReq); confReq = null; }
+  confCtx.clearRect(0,0,confCanvas.width,confCanvas.height);
+}
+
+/* show celebrate */
+function showCelebrate(){
+  // stop intro
+  if(fallTimer) clearInterval(fallTimer);
+  // hide intro
+  introScene.classList.remove('active'); introScene.style.display='none';
+  // show celebrate
+  celebrateScene.style.display='flex'; celebrateScene.classList.add('active');
+  // start confetti & balloons
+  startConfetti();
+}
+
+/* balloons spawn */
+(function spawnBalloons(){
+  const parent = document.getElementById('celebrate');
+  function create(){
+    const b = document.createElement('div'); b.className = 'balloon'; b.textContent = '🎈';
+    b.style.left = Math.random()*86 + 'vw'; b.style.fontSize = (24 + Math.random()*42) + 'px';
+    b.style.animationDuration = (6 + Math.random()*8) + 's';
+    parent.appendChild(b); setTimeout(()=> b.remove(), 14000);
+  }
+  setInterval(()=> { if(getComputedStyle(parent).display !== 'none') create(); }, 760);
+})();
+
+/* ====== Book: cover + pages ====== */
+const pageStack = document.getElementById('pageStack');
+const pagesData = [
+  {title:"Page 1", text:"On this special day, I just want to remind you how amazing you are. You bring so much joy to everyone around you."},
+  {title:"Page 2", text:"May your birthday be filled with laughter, surprises, and endless happiness. You truly deserve the best!"},
+  {title:"Page 3", text:"Each year, you shine brighter than before. Keep chasing your dreams, keep smiling, and keep inspiring us."},
+  {title:"Page 4", text:"Happy Birthday once again! May this year bring you love, success, and countless beautiful memories."}
+];
+
+let currentFlip = 0;
+function buildPages(){
+  // remove old pages (keep cover if present)
+  // ensure cover exists
+  const cover = document.getElementById('cover');
+  // remove any existing pages
+  Array.from(pageStack.querySelectorAll('.page')).forEach(n=>n.remove());
+  // create pages (index 0 is top-most page)
+  for(let i=0;i<pagesData.length;i++){
+    const p = document.createElement('div');
+    p.className = 'page';
+    p.dataset.index = i;
+    p.innerHTML = `<h2 style="margin:0;color:var(--accent)">${pagesData[i].title}</h2><div style="height:12px"></div><p style="color:#333;line-height:1.6;margin:0;white-space:pre-wrap">${pagesData[i].text}</p>`;
+    p.style.zIndex = 120 - i*10;
+    pageStack.appendChild(p);
+  }
+  currentFlip = 0;
+  updatePagesVisual();
+}
+
+function updatePagesVisual(){
+  const nodes = pageStack.querySelectorAll('.page');
+  nodes.forEach((node, idx)=>{
+    if(idx < currentFlip){ node.classList.add('flipped'); node.style.boxShadow = '0 6px 18px rgba(0,0,0,0.08)'; }
+    else { node.classList.remove('flipped'); node.style.boxShadow = '0 12px 30px rgba(2,8,23,0.18)'; }
+  });
+}
+
+/* Next/Prev behavior: if cover exists and not yet opened, Next should open cover first */
+const coverEl = document.getElementById('cover');
+function openCoverThenFlip(){
+  // flip the cover away (animate by adding flipped to cover to move it visually)
+  // we'll simply hide cover then reveal pages (cover is separate)
+  coverEl.style.transition = 'transform 700ms cubic-bezier(.2,.9,.2,1), opacity 400ms';
+  coverEl.style.transform = 'translateX(40px) rotateY(-18deg) scale(0.98)';
+  coverEl.style.opacity = '0';
+  setTimeout(()=> {
+    // remove cover from DOM visually
+    coverEl.remove();
+    // build pages and show first page stack
+    buildPages();
+  }, 520);
+}
+
+/* Next button */
+document.getElementById('nextBtn').addEventListener('click', ()=>{
+  // if cover still present and no pages yet => open cover
+  if(document.getElementById('cover')){ openCoverThenFlip(); return; }
+  // else flip next page
+  if(currentFlip < pagesData.length){ currentFlip++; updatePagesVisual(); }
+});
+
+/* Prev button */
+document.getElementById('prevBtn').addEventListener('click', ()=>{
+  if(currentFlip > 0){ currentFlip--; updatePagesVisual(); }
+  else {
+    // if no flips and pages exist, optionally restore cover? we won't reinsert cover automatically
+  }
+});
+
+/* clicking cover to open */
+if(coverEl){
+  coverEl.addEventListener('click', ()=> {
+    // play a small click sound or simply open
+    openCoverThenFlip();
+  });
+}
+
+/* keyboard arrow support */
+window.addEventListener('keydown',(e)=>{
+  if(e.key === 'ArrowRight') document.getElementById('nextBtn').click();
+  if(e.key === 'ArrowLeft') document.getElementById('prevBtn').click();
+});
+
+/* showBook (when coming from celebrate) */
+function showBook(){
+  // hide celebrate
+  celebrateScene.classList.remove('active'); celebrateScene.style.display='none';
+  stopConfetti();
+  // show book scene
+  bookScene.style.display = 'flex'; bookScene.classList.add('active');
+  // ensure cover is visible (cover was included in HTML)
+  // if cover was removed earlier (re-open scenario) we could recreate, but not necessary now
+}
+
+/* wire to Open Book button on celebrate */
+document.getElementById('toBook').addEventListener('click', ()=> showBook());
+
+/* === Popup typing modal === */
+const modal = document.getElementById('modal'); const modalTyping = document.getElementById('modalTyping');
+const fullPopupText = "Here’s a little secret just for you… You are more loved and cherished than words can ever express. On your birthday and always, know that you mean the world to me. 💖";
+document.getElementById('showPopup').addEventListener('click', ()=>{
+  modal.classList.add('show');
+  modalTyping.textContent = '';
+  let i=0;
+  function step(){ if(i<=fullPopupText.length){ modalTyping.textContent = fullPopupText.slice(0,i); i++; setTimeout(step, 28);} }
+  setTimeout(step, 200);
+});
+document.getElementById('closeModal').addEventListener('click', ()=> modal.classList.remove('show'));
+
+/* ====== Tap-to-start flow already wired: startIntro was called from startExperienceFromTap ====== */
+
+/* ====== Audio fallback resume on any user interaction (keeps autoplay friendly) ====== */
+document.addEventListener('click', function resume(){
+  bgAudio.play().catch(()=>{});
+  document.removeEventListener('click', resume);
+});
+
+/* Build pages only when needed (cover removes then build) */
+
+/* Prevent body scroll when modal open */
+document.body.addEventListener('touchmove', function(e){
+  if(modal.classList.contains('show')) e.preventDefault();
+}, {passive:false});
+</script>
+</body>
+</html>
